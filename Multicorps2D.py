@@ -196,6 +196,8 @@ class Model:
             inter = Hinge_2s(**kwargs)
         elif kind == "Hinge_1sFix":
             inter = Hinge_1sFix(**kwargs)
+        elif kind == "ImposedDispl_Z":
+            inter = ImposedDispl_Z(**kwargs)
         # Creation of the interaction
         self.interactions[tag_I] = inter
 
@@ -518,11 +520,11 @@ class SpringDashpot_2s:
         res.F_BonA = np.zeros((2, Nt))
         for ind in range(0, Nt):
             # Parameters of Solid A
-            q_a = y[self.ind_q_a]
-            dq_a = y[self.ind_dq_a]
+            q_a = y[self.ind_q_a, ind]
+            dq_a = y[self.ind_dq_a, ind]
             # Parameters of Solid B
-            q_b = y[self.ind_q_b]
-            dq_b = y[self.ind_dq_b]
+            q_b = y[self.ind_q_b, ind]
+            dq_b = y[self.ind_dq_b, ind]
 
             # Force of the spring and the dashpot on point A
             res.F_BonA[:, ind] = spring_damper_force(q_a, dq_a, GP_a,
@@ -715,6 +717,59 @@ class Hinge_1sFix:
         # Matrix assembly
         matrices.C[np.ix_(self.ind_c, self.ind_q_a)] = Ca
         matrices.D[self.ind_c] = D - self.bmgt_2xiw0 * d_AB - self.bmgt_w02 * AB
+        return matrices
+
+    def assemble_post(self, t, y, res):
+        return res
+
+
+class ImposedDispl_Z:
+    def __init__(self, label="ImposedDispl_Z", tag_S="tag_S",
+                 t=np.array([0, 1]), z=np.array([0, 1]),
+                 dz=np.array([0, 0]), d2z=np.array([0, 0])):
+        # Common properties
+        self.label = label  # Label of the interaction
+        self.n_c   = 3      # Number of contraints equations
+        self.tag_S = tag_S  # Tags of the solids in interaction
+        # Parameters of Solid A
+        self.ind_q_a = []
+        self.ind_dq_a = []
+        # Initial state
+        self.q_t0 = []
+        # Excitation time series
+        self.t   = t
+        self.z   = z
+        self.dz  = dz
+        self.d2z = d2z
+
+    def _build(self, solids, param):
+        # Solid Sa
+        s_a = solids[self.tag_S]
+        self.ind_q_a = s_a.ind_q
+        self.ind_dq_a = s_a.ind_dq
+        # Initial state
+        self.q_t0 = s_a.q_t0
+        # Baumgarte parameters
+        self.bmgt_2xiw0 = 2 * param.bmgt_xi * param.bmgt_w0
+        self.bmgt_w02 = param.bmgt_w0**2
+
+    def assemble(self, t, y, matrices):
+        # Motion interpolation
+        f   = np.array( [0, np.interp(t, self.t,   self.z), 0] )
+        df  = np.array( [0, np.interp(t, self.t,  self.dz), 0] )
+        d2f = np.array( [0, np.interp(t, self.t, self.d2z), 0] )
+        # Parameters of Solid A
+        q_a = y[self.ind_q_a]
+        dq_a = y[self.ind_dq_a]
+        # Acceleration terms
+        Ca = - np.eye(3)
+        # Velocity term d_AB
+        d_P = dq_a - df
+        # Position term AB
+        P = q_a - (f + self.q_t0)
+        # Matrix assembly
+        matrices.C[np.ix_(self.ind_c, self.ind_q_a)] = Ca
+        matrices.D[self.ind_c] = - d2f + self.bmgt_2xiw0 * d_P + self.bmgt_w02 * P
         return matrices
 
     def assemble_post(self, t, y, res):

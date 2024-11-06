@@ -22,8 +22,8 @@ Xs = np.array([1, 0])/Ns
 
 # Echelle de couleur
 cmap = plt.colormaps["terrain"]
-cmap = plt.colormaps["viridis"]
-cmap = plt.colormaps["gist_rainbow"]
+# cmap = plt.colormaps["viridis"]
+# cmap = plt.colormaps["gist_rainbow"]
 map = cmap(np.linspace(0, 1, Ns))
 
 # Création des solides
